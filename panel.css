@@ -146,14 +146,22 @@ ul li {
   display: block;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 20px 0;
-  overflow-x: auto; 
-  display: block; 
-  white-space: nowrap; 
+
+.table-wrapper {
+  display: flex;           
+  justify-content: center; 
+  overflow-x: auto;        
+  margin: 0 auto;          
+  max-width: 100%;         
 }
+
+.table-wrapper table {
+  border-collapse: collapse;
+  width: auto;             
+  margin: 0;               
+  white-space: nowrap;    
+}
+
 
 th, td {
   border: 1px solid #ddd;

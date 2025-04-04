@@ -1,17 +1,18 @@
 {
   "name": "Klimabytes Extension",
-  "version": "1.0",
+  "version": "2.0",
   "manifest_version": 3,
-  
   "devtools_page": "devtools.html",
-
-  "permissions": [ 
-    "debugger"
+  "permissions": [
+    "tabs",
+    "debugger",
+    "notifications"
   ],
-
-
   "host_permissions": [
-     "https://api.thegreenwebfoundation.org/*"
-   ]
-
+    "https://api.thegreenwebfoundation.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"	
+  }
 }

@@ -2,6 +2,7 @@ import { co2 } from "./vendor/co2/index.js";
 
 const co2Lib = new co2();
 
+
 const startBtn = document.getElementById("startTracking");
 const stopBtn = document.getElementById("stopTracking");
 const reqCountEl = document.getElementById("reqCount");
@@ -11,40 +12,31 @@ const unaccountedCountEl = document.getElementById("unaccountedCount");
 const accountedTableBody = document.getElementById("accountedTableBody");
 const unaccountedTableBody = document.getElementById("unaccountedTableBody");
 
-const domainMap = new Map();
+let aggregatedRequests = [];           
+let aggregatedUnaccountedRequests = [];   
+let aggregatedTotalBytes = 0;
+let aggregatedTotalCo2 = 0;
 
-
-let isTracking = false;
-let requests = [];
-let unaccountedRequests = [];
-let totalBytes = 0;
-let totalCo2 = 0;
-let domainVisited = "";
-
-
-function updateVisitedDomain() {
-  chrome.devtools.inspectedWindow.eval("window.location.hostname", (result) => {
-
-    if (result && result !== domainVisited) {
-      console.log(`Domain changed from ${domainVisited} to ${result}`);
-      domainVisited = result;
-      updateRealTimeStats(); 
-    }
-  });
-
-}
-
-
-let networkDebuggerActive = false;
 const pendingRequests = new Map();
 
 
+const accountedRowsMap = new Map();
+const unaccountedRowsMap = new Map();
+
 let domainCheckInterval;
+
 
 function extractDomain(url) {
   const a = document.createElement("a");
   a.href = url;
-  return a.hostname;
+  const hostname = a.hostname;
+  const parts = hostname.split('.');
+  
+  // If the hostname has at least 3 parts, assume the last two are the root.
+  if (parts.length > 2) {
+    return parts.slice(-2).join('.');
+  }
+  return hostname;
 }
 
 async function fetchHostingProvider(url) {
@@ -59,255 +51,158 @@ async function fetchHostingProvider(url) {
   }
 }
 
-
-
-async function setupNetworkDebugger() {
-  const tabId = chrome.devtools.inspectedWindow.tabId;
-
-  try {
-
-    await new Promise((resolve, reject) => {
-      chrome.debugger.attach({ tabId }, "1.3", () => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        }
-        resolve();
-      });
-    });
-
-
-    await new Promise((resolve, reject) => {
-      chrome.debugger.sendCommand(
-        { tabId },
-        "Network.enable",
-        {
-          maxTotalBufferSize: 10000000,
-          maxResourceBufferSize: 5000000
-        },
-        () => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          }
-          resolve();
-        }
-      );
-    });
-
-    networkDebuggerActive = true;
-    setupNetworkEventListeners(tabId);
-
-  } catch (error) {
-    console.error("Failed to setup network debugger:", error);
-    networkDebuggerActive = false;
-  }
+function calculateHeadersSize(headers) {
+  if (!headers) return 0;
+  return Object.entries(headers).reduce((size, [key, value]) => size + key.length + value.length + 4, 2);
 }
 
-function setupNetworkEventListeners(tabId) {
-  chrome.debugger.onEvent.addListener(async (source, method, params) => {
-    if (source.tabId !== tabId || !isTracking) return;
 
- 
+let domainVisited = "";
 
-    switch (method) {
-      case "Network.requestWillBeSent":
-        handleRequestStart(params);
-        break;
-      case "Network.responseReceived":
-        await handleResponseReceived(params);
-        break;
+function updateVisitedDomain() {
+  chrome.devtools.inspectedWindow.eval("window.location.hostname", (result) => {
 
-      case "Network.requestServedFromCache":
-        handleRequestServedFromCache(params);
-        break;
-
-      case "Network.loadingFinished":
-        await handleLoadingFinished(params);
-        break;
-
-      case "Network.loadingFailed":
-        handleLoadingFailed(params);
-        break;
+    if (result && result !== domainVisited) {
+      console.log(`Domain changed from ${domainVisited} to ${result}`);
+      domainVisited = result;
+      updateRealTimeStats(); 
     }
   });
+
 }
 
-function handleRequestStart(params) {
+function handleRequestStart(params, tabId) {
   const { requestId, request, timestamp } = params;
-  pendingRequests.set(requestId, {
-    url: request.url,
+
+  if (!request.url || !request.url.startsWith("http")) {
+    return;
+  }
+  
+  const key = `${tabId}-${requestId}`;
+  console.log(params);
+  const visitedDomain = extractDomain(params.documentURL); 
+
+  pendingRequests.set(key, {
+    url: request.url, 
     startTime: timestamp,
-    size: 0
+    size: 0,
+    visitedDomain
   });
 }
 
-function handleRequestServedFromCache(params) {
+function handleRequestServedFromCache(params, tabId) {
   const { requestId } = params;
-  const request = pendingRequests.get(requestId);
-  if (!request) return;
-
-  request.servedFromCache = true;
+  const key = `${tabId}-${requestId}`;
+  const req = pendingRequests.get(key);
+  if (req) req.servedFromCache = true;
 }
 
-async function handleResponseReceived(params) {
+async function handleResponseReceived(params, tabId) {
   const { requestId, response } = params;
-  const request = pendingRequests.get(requestId);
-
-  if (!request) return;
-
-
-  request.headers = response.headers;
-  request.mimeType = response.mimeType;
-  request.protocol = response.protocol;
-  request.status = response.status;
+  const key = `${tabId}-${requestId}`;
+  const req = pendingRequests.get(key);
+  if (!req) return;
+  req.headers = response.headers;
+  req.mimeType = response.mimeType;
+  req.protocol = response.protocol;
+  req.status = response.status;
 }
 
-async function handleLoadingFinished(params) {
+async function handleLoadingFinished(params, tabId) {
   const { requestId, encodedDataLength } = params;
-  const request = pendingRequests.get(requestId);
-
-  if (!request) return;
-
+  const key = `${tabId}-${requestId}`;
+  const req = pendingRequests.get(key);
+  if (!req) return;
   try {
-
-    const headersSize = calculateHeadersSize(request.headers);
+    const headersSize = calculateHeadersSize(req.headers);
     const totalSize = encodedDataLength + headersSize;
-
-    const domain = extractDomain(request.url);
-    const filetype = request.mimeType?.split("/")?.[1] || "other";
-
+    const domain = extractDomain(req.url);
+    const filetype = req.mimeType?.split("/")?.[1] || "other";
     if (totalSize > 0) {
-      
-      const isGreen = await fetchHostingProvider(request.url);
-
+      const isGreen = await fetchHostingProvider(req.url);
       const co2Emissions = co2Lib.perByte(totalSize, isGreen);
-
-
-      requests.push({
-        visitedDomain: domainVisited,
+      aggregatedRequests.push({
+        visitedDomain: req.visitedDomain,
         hostdomain: domain,
         datavolume: totalSize,
         co2: co2Emissions,
         filetype
       });
-
-      totalBytes += totalSize;
-      totalCo2 += co2Emissions;
+      aggregatedTotalBytes += totalSize;
+      aggregatedTotalCo2 += co2Emissions;
     } else {
-      unaccountedRequests.push({
-        visitedDomain: domainVisited,
+      aggregatedUnaccountedRequests.push({
+        visitedDomain: req.visitedDomain,
         hostdomain: domain,
         filetype
       });
     }
-
     updateRealTimeStats();
     updateAccountedDetailsTab();
     updateUnaccountedDetailsTab();
-
   } catch (error) {
-    console.error(`Failed to process request ${request.url}:`, error);
-    unaccountedRequests.push({
-      visitedDomain: domainVisited,
-      hostdomain: extractDomain(request.url),
-      filetype: request.mimeType?.split("/")?.[1] || "other"
+    console.error(`Failed to process request ${req.url}:`, error);
+    aggregatedUnaccountedRequests.push({
+      visitedDomain: req.visitedDomain,
+      hostdomain: extractDomain(req.url),
+      filetype: req.mimeType?.split("/")?.[1] || "other"
     });
     updateUnaccountedDetailsTab();
   } finally {
-    pendingRequests.delete(requestId);
+    pendingRequests.delete(key);
   }
 }
 
-function handleLoadingFailed(params) {
+function handleLoadingFailed(params, tabId) {
   const { requestId, errorText } = params;
-  const request = pendingRequests.get(requestId);
-
-  if (request) {
-    console.warn(`Request failed for ${request.url}: ${errorText}`);
-    unaccountedRequests.push({
-      visitedDomain: domainVisited,
-      hostdomain: extractDomain(request.url),
-      filetype: request.mimeType?.split("/")?.[1] || "other"
+  const key = `${tabId}-${requestId}`;
+  const req = pendingRequests.get(key);
+  if (req) {
+    console.warn(`Request failed for ${req.url}: ${errorText}`);
+    aggregatedUnaccountedRequests.push({
+      visitedDomain: req.visitedDomain,
+      hostdomain: extractDomain(req.url),
+      filetype: req.mimeType?.split("/")?.[1] || "other"
     });
     updateUnaccountedDetailsTab();
-    pendingRequests.delete(requestId);
+    pendingRequests.delete(key);
   }
 }
 
 
-async function startTracking() {
-  if (isTracking) return;
-
-  isTracking = true;
-  requests = [];
-  unaccountedRequests = [];
-  totalBytes = 0;
-  totalCo2 = 0;
-  pendingRequests.clear();
-
-  reqCountEl.textContent = "0";
-  totalBytesEl.textContent = "0 KB";
-  co2ValEl.textContent = "0.0000 g";
-  unaccountedCountEl.textContent = "0";
-
-  updateVisitedDomain();
-  domainCheckInterval = setInterval(updateVisitedDomain, 1000);
-
-  await setupNetworkDebugger();
-}
-
-
-function stopTracking() {
-  if (!isTracking) return;
-  isTracking = false;
-
-  clearInterval(domainCheckInterval);
-
-  if (networkDebuggerActive) {
-    const tabId = chrome.devtools.inspectedWindow.tabId;
-    chrome.debugger.detach({ tabId }, () => {
-      if (chrome.runtime.lastError) {
-        console.error('Error detaching debugger:', chrome.runtime.lastError);
-      }
-      networkDebuggerActive = false;
-    });
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "NETWORK_EVENT") {
+    const { eventType, params, tabId } = message;
+    switch (eventType) {
+      case "Network.requestWillBeSent":
+        handleRequestStart(params, tabId);
+        break;
+      case "Network.responseReceived":
+        handleResponseReceived(params, tabId);
+        break;
+      case "Network.requestServedFromCache":
+        handleRequestServedFromCache(params, tabId);
+        break;
+      case "Network.loadingFinished":
+        handleLoadingFinished(params, tabId);
+        break;
+      case "Network.loadingFailed":
+        handleLoadingFailed(params, tabId);
+        break;
+    }
   }
-
-  pendingRequests.clear();
-}
-
-
-function calculateHeadersSize(headers) {
-  if (!headers) return 0;
-
-  return Object.entries(headers)
-    .reduce((size, [key, value]) => {
-      return size + key.length + value.length + 4; 
-    }, 2); 
-}
-
-
+});
 
 function updateRealTimeStats() {
-  reqCountEl.textContent = requests.length.toString();
-  totalBytesEl.textContent = `${(totalBytes / 1024).toFixed(4)} KB`;
-  co2ValEl.textContent = `${totalCo2.toFixed(10)} g`;
-  unaccountedCountEl.textContent = unaccountedRequests.length.toString();
+  reqCountEl.textContent = aggregatedRequests.length.toString();
+  totalBytesEl.textContent = `${(aggregatedTotalBytes / 1024).toFixed(4)} KB`;
+  co2ValEl.textContent = `${aggregatedTotalCo2.toFixed(10)} g`;
+  unaccountedCountEl.textContent = aggregatedUnaccountedRequests.length.toString();
 }
 
-
-
-
-const accountedRowsMap = new Map();
-
 function updateAccountedDetailsTab() {
-  const filteredRequests = requests.filter(
-    (r) => r.visitedDomain === domainVisited && r.co2 !== "unaccounted"
-  );
-
-
-  // Format: "visitedDomain|hostdomain|filetype"
   const aggregatedData = new Map();
-  filteredRequests.forEach(({ visitedDomain, hostdomain, datavolume, co2, filetype }) => {
+  aggregatedRequests.forEach(({ visitedDomain, hostdomain, datavolume, co2, filetype }) => {
     const key = `${visitedDomain}|${hostdomain}|${filetype}`;
     if (aggregatedData.has(key)) {
       const prev = aggregatedData.get(key);
@@ -317,10 +212,8 @@ function updateAccountedDetailsTab() {
       aggregatedData.set(key, { visitedDomain, hostdomain, filetype, datavolume, co2 });
     }
   });
-
   aggregatedData.forEach((data, key) => {
     if (accountedRowsMap.has(key)) {
-     
       const row = accountedRowsMap.get(key);
       row.children[3].textContent = `${(data.datavolume / 1024).toFixed(4)} KB`;
       row.children[4].textContent = `${data.co2.toFixed(10)} g`;
@@ -337,64 +230,33 @@ function updateAccountedDetailsTab() {
       accountedRowsMap.set(key, row);
     }
   });
-
   populateAccountedFilters();
 }
 
-  
-
-
-
 function updateUnaccountedDetailsTab() {
-  unaccountedTableBody.innerHTML = "";
-  unaccountedRequests.forEach(({ hostdomain, visitedDomain, filetype }) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${visitedDomain}</td>
-      <td>${hostdomain}</td>
-      <td>${filetype}</td>
-      <td>N/A</td>
-      <td>Unaccounted</td>
-    `;
-    unaccountedTableBody.appendChild(row);
+  const aggregatedData = new Map();
+  aggregatedUnaccountedRequests.forEach(({ visitedDomain, hostdomain, filetype }) => {
+    const key = `${visitedDomain}|${hostdomain}|${filetype}`;
+    if (!aggregatedData.has(key)) {
+      aggregatedData.set(key, { visitedDomain, hostdomain, filetype });
+    }
   });
-
+  aggregatedData.forEach((data, key) => {
+    if (!unaccountedRowsMap.has(key)) {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${data.visitedDomain}</td>
+        <td>${data.hostdomain}</td>
+        <td>${data.filetype}</td>
+        <td>N/A</td>
+        <td>Unaccounted</td>
+      `;
+      unaccountedTableBody.appendChild(row);
+      unaccountedRowsMap.set(key, row);
+    }
+  });
   populateUnaccountedFilters();
-
 }
-
-
-document.addEventListener("DOMContentLoaded", () => {
-  const mainTabs = document.querySelectorAll(".tab-button");
-  const mainContents = document.querySelectorAll(".tab-content");
-
-  mainTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      mainTabs.forEach((t) => t.classList.remove("active"));
-      mainContents.forEach((c) => c.classList.remove("active"));
-
-      tab.classList.add("active");
-      document.getElementById(tab.dataset.tab).classList.add("active");
-    });
-  });
-
-  const nestedTabs = document.querySelectorAll(".nested-tab-button");
-  const nestedContents = document.querySelectorAll(".nested-tab-content");
-
-  nestedTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      nestedTabs.forEach((t) => t.classList.remove("active"));
-      nestedContents.forEach((c) => c.classList.remove("active"));
-
-      tab.classList.add("active");
-      document.getElementById(tab.dataset.tab).classList.add("active");
-    });
-  });
-});
-
-startBtn.addEventListener("click", startTracking);
-stopBtn.addEventListener("click", stopTracking);
-
 
 
 function populateFilterDropdowns(dropdownId, values) {
@@ -409,17 +271,15 @@ function populateFilterDropdowns(dropdownId, values) {
 }
 
 function populateAccountedFilters() {
-  const domains = [...new Set(requests.map((r) => r.visitedDomain))];
-  const fileTypes = [...new Set(requests.map((r) => r.filetype))];
-
+  const domains = [...new Set(aggregatedRequests.map((r) => r.visitedDomain))];
+  const fileTypes = [...new Set(aggregatedRequests.map((r) => r.filetype))];
   populateFilterDropdowns("accountedDomainFilter", domains);
   populateFilterDropdowns("accountedTypeFilter", fileTypes);
 }
 
 function populateUnaccountedFilters() {
-  const domains = [...new Set(unaccountedRequests.map((r) => r.visitedDomain))];
-  const fileTypes = [...new Set(unaccountedRequests.map((r) => r.filetype))];
-
+  const domains = [...new Set(aggregatedUnaccountedRequests.map((r) => r.visitedDomain))];
+  const fileTypes = [...new Set(aggregatedUnaccountedRequests.map((r) => r.filetype))];
   populateFilterDropdowns("unaccountedDomainFilter", domains);
   populateFilterDropdowns("unaccountedTypeFilter", fileTypes);
 }
@@ -427,40 +287,96 @@ function populateUnaccountedFilters() {
 function filterAccountedTable() {
   const domainFilter = document.getElementById("accountedDomainFilter").value;
   const typeFilter = document.getElementById("accountedTypeFilter").value;
-
   const rows = accountedTableBody.querySelectorAll("tr");
   rows.forEach((row) => {
     const visitedDomainCell = row.children[0].textContent;
     const fileTypeCell = row.children[2].textContent;
-
-    const matchesDomain = domainFilter === "all" || visitedDomainCell === domainFilter;
-    const matchesType = typeFilter === "all" || fileTypeCell === typeFilter;
-
-    row.style.display = matchesDomain && matchesType ? "" : "none";
+    row.style.display =
+      (domainFilter === "all" || visitedDomainCell === domainFilter) &&
+      (typeFilter === "all" || fileTypeCell === typeFilter)
+        ? ""
+        : "none";
   });
 }
 
 function filterUnaccountedTable() {
   const domainFilter = document.getElementById("unaccountedDomainFilter").value;
   const typeFilter = document.getElementById("unaccountedTypeFilter").value;
-
   const rows = unaccountedTableBody.querySelectorAll("tr");
   rows.forEach((row) => {
     const visitedDomainCell = row.children[0].textContent;
     const fileTypeCell = row.children[2].textContent;
-
-    const matchesDomain = domainFilter === "all" || visitedDomainCell === domainFilter;
-    const matchesType = typeFilter === "all" || fileTypeCell === typeFilter;
-
-    row.style.display = matchesDomain && matchesType ? "" : "none";
+    row.style.display =
+      (domainFilter === "all" || visitedDomainCell === domainFilter) &&
+      (typeFilter === "all" || fileTypeCell === typeFilter)
+        ? ""
+        : "none";
   });
 }
 
-
 document.getElementById("accountedDomainFilter").addEventListener("change", filterAccountedTable);
 document.getElementById("accountedTypeFilter").addEventListener("change", filterAccountedTable);
-
 document.getElementById("unaccountedDomainFilter").addEventListener("change", filterUnaccountedTable);
 document.getElementById("unaccountedTypeFilter").addEventListener("change", filterUnaccountedTable);
+
+
+async function startTracking() {
+
+  aggregatedRequests = [];
+  aggregatedUnaccountedRequests = [];
+  aggregatedTotalBytes = 0;
+  aggregatedTotalCo2 = 0;
+  pendingRequests.clear();
+  accountedRowsMap.clear();
+  unaccountedRowsMap.clear();
+  reqCountEl.textContent = "0";
+  totalBytesEl.textContent = "0 KB";
+  co2ValEl.textContent = "0.0000 g";
+  unaccountedCountEl.textContent = "0";
+  accountedTableBody.innerHTML = "";
+  unaccountedTableBody.innerHTML = "";
+
+  const tabId = chrome.devtools.inspectedWindow.tabId;
+
+
+  chrome.runtime.sendMessage({ type: "START_TRACKING", tabId }, (response) => {
+    console.log("Background response:", response.status);
+  });
+
+  updateVisitedDomain();
+  domainCheckInterval = setInterval(updateVisitedDomain, 1000);
+}
+
+function stopTracking() {
+
+  chrome.runtime.sendMessage({ type: "STOP_TRACKING" });
+  clearInterval(domainCheckInterval);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const mainTabs = document.querySelectorAll(".tab-button");
+  const mainContents = document.querySelectorAll(".tab-content");
+  mainTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      mainTabs.forEach((t) => t.classList.remove("active"));
+      mainContents.forEach((c) => c.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.tab).classList.add("active");
+    });
+  });
+  const nestedTabs = document.querySelectorAll(".nested-tab-button");
+  const nestedContents = document.querySelectorAll(".nested-tab-content");
+  nestedTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      nestedTabs.forEach((t) => t.classList.remove("active"));
+      nestedContents.forEach((c) => c.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.tab).classList.add("active");
+    });
+  });
+});
+
+startBtn.addEventListener("click", startTracking);
+stopBtn.addEventListener("click", stopTracking);
 
 
