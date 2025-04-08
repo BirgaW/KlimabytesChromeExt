@@ -1,3 +1,8 @@
+"use strict";
+
+
+const ALLOWED_MESSAGE_TYPES = new Set(["START_TRACKING", "STOP_TRACKING"]);
+
 const trackedTabs = new Set();
 const attemptedTabs = new Set();
 let initialTabHandled = false;
@@ -91,7 +96,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       buttons: [{ title: "Yes" }, { title: "No" }],
       isClickable: true
     });
-    console.log('Notification created for tab:', tabId, tab.url);
   }
 });
 
@@ -102,9 +106,8 @@ chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) =
     const tabId = parseInt(notificationId.split("-")[2]);
     if (buttonIndex === 0) {
       attachDebugger(tabId);
-      console.log(`Tracking für Tab ${tabId} wurde gestartet.`);
     } else {
-      console.log(`Tracking für Tab ${tabId} wurde abgelehnt.`);
+      console.log(`Tracking for Tab ${tabId} declined.`);
     }
     chrome.notifications.clear(notificationId);
   }
@@ -122,12 +125,17 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || typeof message.type !== "string" || !ALLOWED_MESSAGE_TYPES.has(message.type)) {
+    console.error("Received an unknown or disallowed message type:", message);
+    return;
+  }
+
   if (message.type === "START_TRACKING") {
     const tabId = message.tabId || (sender && sender.tab && sender.tab.id);
     if (trackedTabs.has(tabId)) {
       sendResponse({ status: "Tracking already started" });
     } else {
-      console.log(typeof tabId);
+
       attachDebugger(tabId);
       trackingStarted = true;
       sendResponse({ status: "Tracking started" });

@@ -1,6 +1,6 @@
 {
   "name": "Klimabytes Extension",
-  "version": "3.0",
+  "version": "8.0",
   "manifest_version": 3,
   "devtools_page": "devtools.html",
   "permissions": [
@@ -9,10 +9,13 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://api.thegreenwebfoundation.org/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",
-    "type": "module"	
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none';"
   }
 }

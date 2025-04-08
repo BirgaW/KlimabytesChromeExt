@@ -1,3 +1,5 @@
+"use strict";
+
 import { co2 } from "./vendor/co2/index.js";
 
 const co2Lib = new co2();
@@ -156,8 +158,25 @@ function handleLoadingFailed(params, tabId) {
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message || typeof message !== "object") {
+    return; // Do nothing if message is not valid
+  }
+  
   if (message.type === "NETWORK_EVENT") {
     const { eventType, params, tabId } = message;
+    const allowedMethods = new Set([
+      "Network.requestWillBeSent",
+      "Network.responseReceived",
+      "Network.requestServedFromCache",
+      "Network.loadingFinished",
+      "Network.loadingFailed"
+    ]);
+    
+    if (!allowedMethods.has(eventType)) {
+      console.warn(`Received unexpected network event: ${eventType}`);
+      return;
+    }
+    
     switch (eventType) {
       case "Network.requestWillBeSent":
         handleRequestStart(params, tabId);
@@ -174,6 +193,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       case "Network.loadingFailed":
         handleLoadingFailed(params, tabId);
         break;
+      default:
+        console.warn("Unhandled event type:", eventType);
     }
   }
 });
