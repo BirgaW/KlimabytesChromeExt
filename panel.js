@@ -32,7 +32,6 @@ function extractDomain(url) {
   const hostname = a.hostname;
   const parts = hostname.split('.');
   
-  // If the hostname has at least 3 parts, assume the last two are the root.
   if (parts.length > 2) {
     return parts.slice(-2).join('.');
   }
@@ -57,19 +56,6 @@ function calculateHeadersSize(headers) {
 }
 
 
-let domainVisited = "";
-
-function updateVisitedDomain() {
-  chrome.devtools.inspectedWindow.eval("window.location.hostname", (result) => {
-
-    if (result && result !== domainVisited) {
-      console.log(`Domain changed from ${domainVisited} to ${result}`);
-      domainVisited = result;
-      updateRealTimeStats(); 
-    }
-  });
-
-}
 
 function handleRequestStart(params, tabId) {
   const { requestId, request, timestamp } = params;
@@ -79,7 +65,6 @@ function handleRequestStart(params, tabId) {
   }
   
   const key = `${tabId}-${requestId}`;
-  console.log(params);
   const visitedDomain = extractDomain(params.documentURL); 
 
   pendingRequests.set(key, {
@@ -343,8 +328,6 @@ async function startTracking() {
     console.log("Background response:", response.status);
   });
 
-  updateVisitedDomain();
-  domainCheckInterval = setInterval(updateVisitedDomain, 1000);
 }
 
 function stopTracking() {

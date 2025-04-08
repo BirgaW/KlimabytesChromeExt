@@ -6,7 +6,6 @@ let trackingStarted = false;
 function isValidUrl(url) {
   return url && !url.startsWith("chrome://") && !url.startsWith("about:");
 }
-
 function attachDebugger(tabId) {
   tabId = Number(tabId);
 
@@ -64,6 +63,9 @@ chrome.tabs.onCreated.addListener((tab) => {
   }
 });
 
+
+
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if(trackingStarted === false) {
     return;
@@ -83,25 +85,30 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     attemptedTabs.add(tabId);
     chrome.notifications.create(`track-tab-${tabId}`, {
       type: "basic",
-      iconUrl: "./images/logokb.webp",
+      iconUrl: "/images/logokb.webp",
       title: "Enable Tracking",
       message: `Do you want to track network requests on ${tab.url}?`,
       buttons: [{ title: "Yes" }, { title: "No" }],
       isClickable: true
     });
+    console.log('Notification created for tab:', tabId, tab.url);
   }
 });
+
+
 
 chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
   if (notificationId.startsWith("track-tab-")) {
     const tabId = parseInt(notificationId.split("-")[2]);
-    if (buttonIndex === 0) { 
-      attachDebugger(tabId); 
+    if (buttonIndex === 0) {
+      attachDebugger(tabId);
+      console.log(`Tracking für Tab ${tabId} wurde gestartet.`);
+    } else {
+      console.log(`Tracking für Tab ${tabId} wurde abgelehnt.`);
     }
     chrome.notifications.clear(notificationId);
   }
 });
-
 
 chrome.debugger.onEvent.addListener((source, method, params) => {
   if (!trackedTabs.has(source.tabId)) return;
@@ -150,5 +157,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     });
   }
 });
+
+
+
 
 
