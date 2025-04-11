@@ -1,6 +1,6 @@
 {
   "name": "Klimabytes Extension",
-  "version": "8.0",
+  "version": "9.0",
   "manifest_version": 3,
   "devtools_page": "devtools.html",
   "permissions": [

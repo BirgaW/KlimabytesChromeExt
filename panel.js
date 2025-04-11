@@ -380,6 +380,44 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
+
+function formatBytes(bytes) {
+  const mbValue = (bytes / (1024 * 1024)).toFixed(4);
+  return { value: mbValue, unit: "MB" };
+}
+
+function exportToCSV() {
+  let csvContent = `"Visited Domain","Host Domain","Filetype","Data Volume (MB)","CO₂"\n`;
+  
+  aggregatedRequests.forEach(item => {
+    const { value, unit } = formatBytes(item.datavolume);
+    const row = [
+      item.visitedDomain,
+      item.hostdomain,
+      item.filetype,
+      `${value} ${unit}`,
+      `${item.co2.toFixed(10)} g`
+    ];
+    csvContent += row.map(field => `"${field}"`).join(",") + "\n";
+  });
+  
+  return csvContent;
+}
+
+
+document.getElementById("downloadData").addEventListener("click", () => {
+  const csvData = exportToCSV();
+  const blob = new Blob([csvData], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "network_data.csv";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
 startBtn.addEventListener("click", startTracking);
 stopBtn.addEventListener("click", stopTracking);
 
