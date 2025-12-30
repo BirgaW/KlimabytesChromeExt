@@ -26,8 +26,7 @@ var __objRest = (source, exclude) => {
     }
   return target;
 };
-import OneByte from "./1byte.js";
-import SustainableWebDesignV3 from "./sustainable-web-design-v3.js";
+
 import SustainableWebDesignV4 from "./sustainable-web-design-v4.js";
 import {
   parseByteTraceOptions,
@@ -35,11 +34,11 @@ import {
 } from "./helpers/index.js";
 class CO2 {
   constructor(options) {
-    this.model = new SustainableWebDesignV3();
+    this.model = new SustainableWebDesignV4();
     if ((options == null ? void 0 : options.model) === "1byte") {
       this.model = new OneByte();
     } else if ((options == null ? void 0 : options.model) === "swd") {
-      this.model = new SustainableWebDesignV3();
+      this.model = new SustainableWebDesignV4();
       if ((options == null ? void 0 : options.version) === 4) {
         this.model = new SustainableWebDesignV4();
       }
