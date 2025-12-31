@@ -16,10 +16,10 @@
     </header>
 
     <main>
-        <h1>CO2 Analyzer (Real-Time)</h1>
+        <h1>CO₂-Browsing-Monitor</h1>
 
         <div class="tabs">
-            <button class="tab-button active" data-tab="realTimeTab">Real-Time Data</button>
+            <button class="tab-button active" data-tab="realTimeTab">Echtzeitdaten</button>
             <button class="tab-button" data-tab="detailsTab">Details</button>
         </div>
 
@@ -27,23 +27,36 @@
             <div class="tab-content active" id="realTimeTab">
                 <div class="options">
 
-                    <button id="startTracking">Start Tracking</button>
-                    <button id="stopTracking">Stop Tracking</button>
+                    <button id="startTracking">Tracking starten</button>
+                    <button id="stopTracking">Tracking stoppen</button>
+                    <div id="deviceGridIntensityFilter">
+                        <label for="deviceGridIntensity">CO₂-Intensität wählen:</label>
+                        <select id="deviceGridIntensity">
+                            <option value="WORLD">Weltweit</option>
+                            <option value="DE">Deutschland</option>
+                            <option value="CH">Schweiz</option>
+                            <option value="AT">Österreich</option>
+                            <option value="FR">Frankreich</option>
+                            <option value="US">USA</option>
+                            <option value="CN">China</option>
+                        </select>
+                    </div>
 
 
                 </div>
                 <div class="tracking-info">
-                    <p><strong>Requests Count:</strong> <span id="reqCount">0</span></p>
-                    <p><strong>Total Bytes:</strong> <span id="totalBytes">0 KB</span></p>
-                    <p><strong>Estimated CO₂ (grams):</strong> <span id="co2Val">N/A</span></p>
-                    <p><strong>Unaccounted Requests:</strong> <span id="unaccountedCount">0</span></p>
+                    <p><strong>Anzahl Requests:</strong> <span id="reqCount">0</span></p>
+                    <p><strong>Übertragene Bytes gesamt:</strong> <span id="totalBytes">0 KB</span></p>
+                    <p><strong>CO₂-Emissionen (Gramm):</strong> <span id="co2Val">N/A</span></p>
+                    <p><strong>Anzahl ungezählter Requests:</strong> <span id="unaccountedCount">0</span></p>
                 </div>
             </div>
 
             <div class="tab-content" id="detailsTab">
                 <div class="nested-tabs">
-                    <button class="nested-tab-button active" data-tab="accountedTab">Accounted Resources</button>
-                    <button class="nested-tab-button" data-tab="unaccountedTab">Unaccounted Resources</button>
+                    <button class="nested-tab-button active" data-tab="accountedTab">Verarbeitete
+                        Requests</button>
+                    <button class="nested-tab-button" data-tab="unaccountedTab">Ungültige Requests</button>
                 </div>
 
 
@@ -52,26 +65,26 @@
                         <div>
                             <label for="accountedDomainFilter">Domain-Filter:</label>
                             <select id="accountedDomainFilter">
-                                <option value="all">All</option>
+                                <option value="all">Alle</option>
                             </select>
                         </div>
                         <div>
-                            <label for="accountedTypeFilter">Type-Filter:</label>
+                            <label for="accountedTypeFilter">Datentyp-Filter:</label>
                             <select id="accountedTypeFilter">
-                                <option value="all">All</option>
+                                <option value="all">Alle</option>
                             </select>
                         </div>
-                        <button id="downloadData">Download Data</button>
+                        <button id="downloadData">Daten-Download</button>
                     </div>
                     <div class="table-wrapper">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Visited Domain</th>
-                                    <th>Host Domain</th>
-                                    <th>Filetype</th>
-                                    <th>Data Volume</th>
-                                    <th>CO₂</th>
+                                    <th>Besuchte Domain</th>
+                                    <th>Host-Domain</th>
+                                    <th>Dateityp</th>
+                                    <th>Datenvolumen</th>
+                                    <th>CO₂-Emissionen</th>
                                 </tr>
                             </thead>
                             <tbody id="accountedTableBody"></tbody>
@@ -83,25 +96,25 @@
 
                 <div id="unaccountedTab" class="nested-tab-content">
                     <div class="filteroptions">
-                        <label for="unaccountedDomainFilter">Filter by Domain: </label>
+                        <label for="unaccountedDomainFilter">Domain-Filter: </label>
                         <select id="unaccountedDomainFilter">
-                            <option value="all">All</option>
+                            <option value="all">Alle</option>
                         </select>
 
-                        <label for="unaccountedTypeFilter">Filter by File Type: </label>
+                        <label for="unaccountedTypeFilter">Datentyp-Filter: </label>
                         <select id="unaccountedTypeFilter">
-                            <option value="all">All</option>
+                            <option value="all">Alle</option>
                         </select>
                     </div>
                     <div class="table-wrapper">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Visited Domain</th>
-                                    <th>Host Domain</th>
-                                    <th>Filetype</th>
-                                    <th>Data Volume</th>
-                                    <th>CO₂</th>
+                                    <th>Besuchte Domain</th>
+                                    <th>Host-Domain</th>
+                                    <th>Dateityp</th>
+                                    <th>Datenvolumen</th>
+                                    <th>CO₂-Emissionen</th>
                                 </tr>
                             </thead>
                             <tbody id="unaccountedTableBody"></tbody>
@@ -115,20 +128,6 @@
         <ul>
             <li><a href="https://klimabytes.com/Impressum">Impressum</a></li>
             <li><a href="https://klimabytes.com/Datenschutzerklaerung">Datenschutzerklärung</a></li>
-            <p id="license" xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/"><a
-                    property="dct:title" rel="cc:attributionURL" href="https://klimabytes.com/">Klimabytes</a> by <span
-                    property="cc:attributionName">Birga Woytowicz</span> is licensed under <a
-                    href="https://creativecommons.org/licenses/by-nc-sa/4.0/?ref=chooser-v1" target="_blank"
-                    rel="license noopener noreferrer" style="display:inline-block;">Creative Commons
-                    Attribution-NonCommercial-ShareAlike 4.0 International</a></p>
-            <img style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"
-                src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" alt=""><img
-                style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"
-                src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" alt=""><img
-                style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"
-                src="https://mirrors.creativecommons.org/presskit/icons/nc.svg?ref=chooser-v1" alt=""><img
-                style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"
-                src="https://mirrors.creativecommons.org/presskit/icons/sa.svg?ref=chooser-v1" alt="">
         </ul>
     </footer>
 

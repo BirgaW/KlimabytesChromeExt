@@ -29,25 +29,11 @@ var __objRest = (source, exclude) => {
 
 import SustainableWebDesignV4 from "./sustainable-web-design-v4.js";
 import {
-  parseByteTraceOptions,
-  parseVisitTraceOptions
+  parseByteTraceOptions
 } from "./helpers/index.js";
 class CO2 {
   constructor(options) {
     this.model = new SustainableWebDesignV4();
-    if ((options == null ? void 0 : options.model) === "1byte") {
-      this.model = new OneByte();
-    } else if ((options == null ? void 0 : options.model) === "swd") {
-      this.model = new SustainableWebDesignV4();
-      if ((options == null ? void 0 : options.version) === 4) {
-        this.model = new SustainableWebDesignV4();
-      }
-    } else if (options == null ? void 0 : options.model) {
-      throw new Error(
-        `"${options.model}" is not a valid model. Please use "1byte" for the OneByte model, and "swd" for the Sustainable Web Design model.
-See https://developers.thegreenwebfoundation.org/co2js/models/ to learn more about the models available in CO2.js.`
-      );
-    }
     if ((options == null ? void 0 : options.rating) && typeof options.rating !== "boolean") {
       throw new Error(
         `The rating option must be a boolean. Please use true or false.
@@ -66,17 +52,6 @@ See https://developers.thegreenwebfoundation.org/co2js/models/ to learn more abo
   }
   perByte(bytes, green = false) {
     return this.model.perByte(bytes, green, this._segment, this._rating);
-  }
-  perVisit(bytes, green = false) {
-    var _a;
-    if ((_a = this.model) == null ? void 0 : _a.perVisit) {
-      return this.model.perVisit(bytes, green, this._segment, this._rating);
-    } else {
-      throw new Error(
-        `The perVisit() method is not supported in the model you are using. Try using perByte() instead.
-See https://developers.thegreenwebfoundation.org/co2js/methods/ to learn more about the methods available in CO2.js.`
-      );
-    }
   }
   perByteTrace(bytes, green = false, options = {}) {
     const adjustments = parseByteTraceOptions(
@@ -112,47 +87,9 @@ See https://developers.thegreenwebfoundation.org/co2js/methods/ to learn more ab
       }, otherVariables)
     };
   }
-  perVisitTrace(bytes, green = false, options = {}) {
-    var _a;
-    if ((_a = this.model) == null ? void 0 : _a.perVisit) {
-      const adjustments = parseVisitTraceOptions(
-        options,
-        this.model.version,
-        green
-      );
-      const _b = adjustments, { gridIntensity } = _b, variables = __objRest(_b, ["gridIntensity"]);
-      return {
-        co2: this.model.perVisit(
-          bytes,
-          green,
-          this._segment,
-          this._rating,
-          adjustments
-        ),
-        green,
-        variables: __spreadValues({
-          description: "Below are the variables used to calculate this CO2 estimate.",
-          bytes,
-          gridIntensity: __spreadValues({
-            description: "The grid intensity (grams per kilowatt-hour) used to calculate this CO2 estimate."
-          }, adjustments.gridIntensity)
-        }, variables)
-      };
-    } else {
-      throw new Error(
-        `The perVisitTrace() method is not supported in the model you are using. Try using perByte() instead.
-See https://developers.thegreenwebfoundation.org/co2js/methods/ to learn more about the methods available in CO2.js.`
-      );
-    }
-  }
-  SustainableWebDesignV3() {
-    return new SustainableWebDesignV3();
-  }
+ 
   SustainableWebDesignV4() {
     return new SustainableWebDesignV4();
-  }
-  OneByte() {
-    return new OneByte();
   }
 }
 var co2_default = CO2;

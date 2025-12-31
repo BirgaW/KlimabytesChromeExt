@@ -66,7 +66,7 @@ main {
   display: block;
 }
 
-button {
+button, #deviceGridIntensityFilter, #downloadData {
   background-color: #51da08;
   color: #121212;
   border: none;
@@ -77,6 +77,20 @@ button {
   font-size: 1rem;
   transition: background-color 0.3s ease;
 }
+
+.options {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;     
+  gap: 1rem;
+}
+
+#deviceGridIntensityFilter {
+  max-width: 220px;
+  margin: 1 auto 1 auto;
+}
+
 
 button:hover {
   background-color: #45a049;
@@ -151,7 +165,7 @@ ul li {
   display: flex;           
   justify-content: center; 
   overflow-x: auto;        
-  margin: 0 auto;          
+  margin: 1rem auto;          
   max-width: 100%;         
 }
 
@@ -207,18 +221,7 @@ table::-webkit-scrollbar-track {
   margin: 0;       
 }
 
-#downloadData {
-  background-color: #51da08;
-  color: #121212;
-  border: none;
-  padding: 0.3rem 0.5rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 0.9em;
-  font-weight: 500;
-  transition: background-color 0.3s ease;
-  align-items: center;
-}
+
 
 
 footer {

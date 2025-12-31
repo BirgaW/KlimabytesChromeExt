@@ -1,6 +1,7 @@
 "use strict";
 
 import { co2 } from "./vendor/co2/index.js";
+import { averageIntensity } from "./vendor/co2/index.js";
 
 const co2Lib = new co2({ model: "swd", version: 4 });
 
@@ -13,19 +14,14 @@ const unaccountedCountEl = document.getElementById("unaccountedCount");
 const accountedTableBody = document.getElementById("accountedTableBody");
 const unaccountedTableBody = document.getElementById("unaccountedTableBody");
 
-let aggregatedRequests = [];
-let aggregatedUnaccountedRequests = [];
 let aggregatedTotalBytes = 0;
 let aggregatedTotalCo2 = 0;
 
 const pendingRequests = new Map();
-
-
 const accountedRowsMap = new Map();
 const unaccountedRowsMap = new Map();
 
 let domainCheckInterval;
-
 
 function extractDomain(url) {
   const a = document.createElement("a");
@@ -120,7 +116,12 @@ async function handleLoadingFinished(params, tabId) {
 
     if (totalSize > 0) {
       const isGreen = await fetchHostingProviderCached(req.url);
-      const co2Emissions = co2Lib.perByte(totalSize, isGreen);
+
+      const trace = co2Lib.perByteTrace(totalSize, isGreen, {
+        gridIntensity: { device: intensitySelect }
+      });
+
+      const co2Emissions = trace.co2;
 
       addAccounted({
         visitedDomain: req.visitedDomain,
@@ -164,20 +165,22 @@ function handleLoadingFailed(params, tabId) {
   const req = pendingRequests.get(key);
   if (req) {
     console.warn(`Request failed for ${req.url}: ${errorText}`);
-    aggregatedUnaccountedRequests.push({
+    addUnaccounted({
       visitedDomain: req.visitedDomain,
       hostdomain: extractDomain(req.url),
       filetype: req.mimeType?.split("/")?.[1] || "other"
     });
+
     updateUnaccountedDetailsTab();
     pendingRequests.delete(key);
   }
 }
 
 
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== "object") {
-    return; 
+    return;
   }
 
   if (message.type === "NETWORK_EVENT") {
@@ -228,7 +231,7 @@ function updateAccountedDetailsTab() {
   accountedAgg.forEach((data, key) => {
     if (accountedRowsMap.has(key)) {
       const row = accountedRowsMap.get(key);
-      row.children[3].textContent = `${(data.datavolume / 1024).toFixed(4)} KB`;
+      row.children[3].textContent = `${(data.datavolume / 1024).toFixed(2)} KB`;
       row.children[4].textContent = `${data.co2.toFixed(7)} g`;
     } else {
       const row = document.createElement("tr");
@@ -236,7 +239,7 @@ function updateAccountedDetailsTab() {
         <td>${data.visitedDomain}</td>
         <td>${data.hostdomain}</td>
         <td>${data.filetype}</td>
-        <td>${(data.datavolume / 1024).toFixed(4)} KB</td>
+        <td>${(data.datavolume / 1024).toFixed(2)} KB</td>
         <td>${data.co2.toFixed(7)} g</td>
       `;
       accountedTableBody.appendChild(row);
@@ -334,11 +337,27 @@ document.getElementById("accountedDomainFilter").addEventListener("change", filt
 document.getElementById("accountedTypeFilter").addEventListener("change", filterAccountedTable);
 document.getElementById("unaccountedDomainFilter").addEventListener("change", filterUnaccountedTable);
 document.getElementById("unaccountedTypeFilter").addEventListener("change", filterUnaccountedTable);
+document.addEventListener("DOMContentLoaded", () => {
+  const sel = document.getElementById("deviceGridIntensity");
+  if (sel) {
+    sel.addEventListener("change", adjustDeviceIntensity);
+    adjustDeviceIntensity();
+  }
+});
+
+
+let intensitySelect = averageIntensity.WORLD;
+
+function adjustDeviceIntensity() {
+  const code = document.getElementById("deviceGridIntensity").value;
+  intensitySelect = averageIntensity[code] ?? averageIntensity.WORLD;
+}
+
 
 const accountedAgg = new Map();
 const unaccountedAgg = new Map();
 
-let accountedRequestCount = 0;      
+let accountedRequestCount = 0;
 let unaccountedRequestCount = 0;
 
 function makeKey(visitedDomain, hostdomain, filetype) {
@@ -423,12 +442,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 function formatBytes(bytes) {
-  const mbValue = (bytes / (1024 * 1024)).toFixed(2);
-  return { value: mbValue, unit: "MB" };
+  const kbValue = (bytes / (1024)).toFixed(2);
+  return { value: kbValue, unit: "KB" };
 }
 
 function exportToCSV() {
-  let csvContent = `"Visited Domain","Host Domain","Filetype","Data Volume (MB)","CO₂"\n`;
+  let csvContent = `"Visited Domain","Host Domain","Filetype","Data Volume (KB)","CO₂"\n`;
 
   for (const item of accountedAgg.values()) {
     const { value, unit } = formatBytes(item.datavolume);
@@ -437,7 +456,7 @@ function exportToCSV() {
       item.hostdomain,
       item.filetype,
       `${value} ${unit}`,
-      `${item.co2.toFixed(10)} g`
+      `${item.co2.toFixed(7)} g`
     ];
     csvContent += row.map(field => `"${field}"`).join(",") + "\n";
   }

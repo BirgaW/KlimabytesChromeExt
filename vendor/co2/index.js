@@ -1,10 +1,5 @@
 import co2 from "./co2.js";
-import averageIntensity from "./data/average-intensities.min.js";
-import marginalIntensity from "./data/marginal-intensities-2021.min.js";
-var src_default = { co2, averageIntensity, marginalIntensity };
-export {
-  averageIntensity,
-  co2,
-  src_default as default,
-  marginalIntensity
-};
+import averageIntensity from "./data/averageIntensity.js";
+
+export { co2, averageIntensity };
+export default { co2, averageIntensity };

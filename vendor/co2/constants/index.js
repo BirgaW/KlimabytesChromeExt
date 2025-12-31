@@ -1,11 +1,12 @@
 import fileSize from "./file-size.js";
-import averageIntensity from "../data/average-intensities.min.js";
+import averageIntensity from "../data/averageIntensity.js";
+
 const KWH_PER_GB = 0.81;
 const END_USER_DEVICE_ENERGY = 0.52;
 const NETWORK_ENERGY = 0.14;
 const DATACENTER_ENERGY = 0.15;
 const PRODUCTION_ENERGY = 0.19;
-const GLOBAL_GRID_INTENSITY = averageIntensity.data["WORLD"];
+const GLOBAL_GRID_INTENSITY = averageIntensity.WORLD;
 const RENEWABLES_GRID_INTENSITY = 50;
 const FIRST_TIME_VIEWING_PERCENTAGE = 0.75;
 const RETURNING_VISITOR_PERCENTAGE = 0.25;
@@ -19,14 +20,7 @@ const SWDV4 = {
   EMBODIED_KWH_PER_GB_DEVICE: 0.081,
   GLOBAL_GRID_INTENSITY: 494
 };
-const SWDMV3_RATINGS = {
-  FIFTH_PERCENTILE: 0.095,
-  TENTH_PERCENTILE: 0.186,
-  TWENTIETH_PERCENTILE: 0.341,
-  THIRTIETH_PERCENTILE: 0.493,
-  FORTIETH_PERCENTILE: 0.656,
-  FIFTIETH_PERCENTILE: 0.846
-};
+
 const SWDMV4_RATINGS = {
   FIFTH_PERCENTILE: 0.04,
   TENTH_PERCENTILE: 0.079,
@@ -46,7 +40,6 @@ export {
   PRODUCTION_ENERGY,
   RENEWABLES_GRID_INTENSITY,
   RETURNING_VISITOR_PERCENTAGE,
-  SWDMV3_RATINGS,
   SWDMV4_RATINGS,
   SWDV4,
   fileSize
