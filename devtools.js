@@ -1,5 +1,5 @@
 chrome.devtools.panels.create(
-  "CO2 Analyzer",     
+  "🌱 CO₂-Rechner",     
   "🌱",                
   "panel.html",      
 );

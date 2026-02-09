@@ -1,9 +1,6 @@
 "use strict";
 
-import { co2 } from "./vendor/co2/index.js";
-import { averageIntensity } from "./vendor/co2/index.js";
-
-const co2Lib = new co2({ model: "swd", version: 4 });
+import { co2, averageIntensity } from "./CO2.js";
 
 const startBtn = document.getElementById("startTracking");
 const stopBtn = document.getElementById("stopTracking");
@@ -43,7 +40,7 @@ const te = new TextEncoder();
 function calculateHeadersSize(headers) {
   if (!headers) return 0;
 
-  let bytes = 2; 
+  let bytes = 2;
   for (const [k, v] of Object.entries(headers)) {
     const line = `${k}: ${String(v)}\r\n`;
     bytes += te.encode(line).length;
@@ -121,47 +118,45 @@ async function handleLoadingFinished(params, tabId) {
   if (!req) return;
 
   try {
-    
+
 
     const headersSize = calculateHeadersSize(req.headers);
 
     const networkBytes = req.servedFromCache ? 0 : (encodedDataLength || 0);
     const totalSize = networkBytes + (req.servedFromCache ? 0 : headersSize);
-    
+
 
     const domain = extractDomain(req.url);
     const filetype = req.mimeType?.split("/")?.[1] || "other";
 
 
-      if (totalSize > 0) {
-        const isGreen = await fetchHostingProviderCached(req.url);
-      
-        const trace = co2Lib.perByteTrace(totalSize, isGreen, {
-          gridIntensity: { device: intensitySelect }
-        });
-      
-        const co2Emissions = trace.co2;
-      
-        addAccounted({
-          visitedDomain: req.visitedDomain,
-          hostdomain: domain,
-          datavolume: totalSize,
-          co2: co2Emissions,
-          filetype
-        });
-      
-        aggregatedTotalBytes += totalSize;
-        aggregatedTotalCo2 += co2Emissions;
-      } else {
-        
-        addAccounted({
-          visitedDomain: req.visitedDomain,
-          hostdomain: domain,
-          datavolume: 0,
-          co2: 0,
-          filetype
-        });
-      }
+    if (totalSize > 0) {
+      const isGreen = await fetchHostingProviderCached(req.url);
+      const greenHostingFactor = isGreen ? 1 : 0;
+
+      const co2Emissions = co2(totalSize, greenHostingFactor, intensitySelect);
+
+
+      addAccounted({
+        visitedDomain: req.visitedDomain,
+        hostdomain: domain,
+        datavolume: totalSize,
+        co2: co2Emissions,
+        filetype
+      });
+
+      aggregatedTotalBytes += totalSize;
+      aggregatedTotalCo2 += co2Emissions;
+    } else {
+
+      addAccounted({
+        visitedDomain: req.visitedDomain,
+        hostdomain: domain,
+        datavolume: 0,
+        co2: 0,
+        filetype
+      });
+    }
 
     updateRealTimeStats();
     updateAccountedDetailsTab();
@@ -203,49 +198,49 @@ function handleLoadingFailed(params, tabId) {
 
 
 function registerRuntimeListeners() {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      if (!message || typeof message !== "object") return;
-  
-      if (message.type === "NETWORK_EVENT") {
-        const { eventType, params, tabId } = message;
-  
-        const allowedMethods = new Set([
-          "Network.requestWillBeSent",
-          "Network.responseReceived",
-          "Network.requestServedFromCache",
-          "Network.loadingFinished",
-          "Network.loadingFailed"
-        ]);
-  
-        if (!allowedMethods.has(eventType)) {
-          console.warn(`Received unexpected network event: ${eventType}`);
-          return;
-        }
-  
-        switch (eventType) {
-          case "Network.requestWillBeSent":
-            handleRequestStart(params, tabId);
-            break;
-          case "Network.responseReceived":
-            handleResponseReceived(params, tabId);
-            break;
-          case "Network.requestServedFromCache":
-            handleRequestServedFromCache(params, tabId);
-            break;
-          case "Network.loadingFinished":
-            handleLoadingFinished(params, tabId);
-            break;
-          case "Network.loadingFailed":
-            handleLoadingFailed(params, tabId);
-            break;
-          default:
-            console.warn("Unhandled event type:", eventType);
-        }
-      }
-    });
-  }
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || typeof message !== "object") return;
 
-  
+    if (message.type === "NETWORK_EVENT") {
+      const { eventType, params, tabId } = message;
+
+      const allowedMethods = new Set([
+        "Network.requestWillBeSent",
+        "Network.responseReceived",
+        "Network.requestServedFromCache",
+        "Network.loadingFinished",
+        "Network.loadingFailed"
+      ]);
+
+      if (!allowedMethods.has(eventType)) {
+        console.warn(`Received unexpected network event: ${eventType}`);
+        return;
+      }
+
+      switch (eventType) {
+        case "Network.requestWillBeSent":
+          handleRequestStart(params, tabId);
+          break;
+        case "Network.responseReceived":
+          handleResponseReceived(params, tabId);
+          break;
+        case "Network.requestServedFromCache":
+          handleRequestServedFromCache(params, tabId);
+          break;
+        case "Network.loadingFinished":
+          handleLoadingFinished(params, tabId);
+          break;
+        case "Network.loadingFailed":
+          handleLoadingFailed(params, tabId);
+          break;
+        default:
+          console.warn("Unhandled event type:", eventType);
+      }
+    }
+  });
+}
+
+
 function updateRealTimeStats() {
   reqCountEl.textContent = accountedRequestCount.toString();
   totalBytesEl.textContent = `${(aggregatedTotalBytes / 1024).toFixed(2)} KB`;
@@ -254,17 +249,17 @@ function updateRealTimeStats() {
 }
 
 function makeCell(text) {
-    const td = document.createElement("td");
-    td.textContent = String(text);
-    return td;
-  }
-  
-  function makeRow(cells) {
-    const tr = document.createElement("tr");
-    cells.forEach(c => tr.appendChild(makeCell(c)));
-    return tr;
-  }
-  
+  const td = document.createElement("td");
+  td.textContent = String(text);
+  return td;
+}
+
+function makeRow(cells) {
+  const tr = document.createElement("tr");
+  cells.forEach(c => tr.appendChild(makeCell(c)));
+  return tr;
+}
+
 
 function updateAccountedDetailsTab() {
   accountedAgg.forEach((data, key) => {
@@ -273,14 +268,14 @@ function updateAccountedDetailsTab() {
       row.children[3].textContent = `${(data.datavolume / 1024).toFixed(2)} KB`;
       row.children[4].textContent = `${data.co2.toFixed(7)} g`;
     } else {
-        const row = makeRow([
-            data.visitedDomain,
-            data.hostdomain,
-            data.filetype,
-            `${(data.datavolume / 1024).toFixed(2)} KB`,
-            `${data.co2.toFixed(7)} g`
-          ]);
-          
+      const row = makeRow([
+        data.visitedDomain,
+        data.hostdomain,
+        data.filetype,
+        `${(data.datavolume / 1024).toFixed(2)} KB`,
+        `${data.co2.toFixed(7)} g`
+      ]);
+
 
 
       accountedTableBody.appendChild(row);
@@ -297,15 +292,15 @@ function updateUnaccountedDetailsTab() {
     if (!unaccountedRowsMap.has(key)) {
 
 
-        const row = makeRow([
-            data.visitedDomain,
-            data.hostdomain,
-            data.filetype,
-            "N/A",
-            "Unaccounted"
-          ]);
+      const row = makeRow([
+        data.visitedDomain,
+        data.hostdomain,
+        data.filetype,
+        "N/A",
+        "Unaccounted"
+      ]);
 
-  
+
       unaccountedTableBody.appendChild(row);
       unaccountedRowsMap.set(key, row);
     }
